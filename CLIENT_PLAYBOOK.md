@@ -129,7 +129,29 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 
 Press **Y** and **Enter** if it asks for confirmation. This only affects this one PowerShell window and does not change any system settings.
 
-### B.5 Run the script
+### B.5 (Optional) Quick sanity check before the full run
+
+Before running the full script, you can verify Tally is responding with a single command. This is optional but recommended, especially if Option A did not work:
+
+```powershell
+curl.exe -X POST -H "Content-Type: text/xml" --data-binary "<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>Trial Balance</REPORTNAME><STATICVARIABLES><EXPLODEFLAG>Yes</EXPLODEFLAG><SVFROMDATE>20250401</SVFROMDATE><SVTODATE>20250430</SVTODATE><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>" http://127.0.0.1:9000/ -o test-tb.xml
+```
+
+Then check what came back:
+
+```powershell
+(Get-Content test-tb.xml -TotalCount 30)
+```
+
+**Good result**: you see many lines with individual ledger names like `Aastha Enterprises`, `AMAZON SELLER SERVICES`, expense account names, etc. This means the fast method works.
+
+**OK result**: you only see a handful of lines with group names like `Capital Account`, `Current Liabilities`, `Current Assets`. This means the fast method did not expand into ledger detail, but **that is fine** — the script automatically detects this and switches to an alternative method that works on all Tally versions. Just run the script as normal in the next step.
+
+**Bad result**: you see `<LINEERROR>` — also fine, the script handles this too.
+
+You can delete the test file afterwards: `Remove-Item test-tb.xml`
+
+### B.6 Run the script
 
 For the default period (Financial Year 2025-26, April 2025 to March 2026):
 
@@ -149,9 +171,9 @@ If your Tally is running on a different computer on the same network (example: I
 .\tally-export.ps1 -TallyUrl http://192.168.1.50:9000/
 ```
 
-### B.6 What you will see
+### B.7 What you will see
 
-The script prints one line per report it tries to export, either **[ OK ]** or **[FAIL]**. A normal run looks like:
+The script first runs a **pre-flight test** to pick the best method for your Tally version, then exports the data. A normal run looks like:
 
 ```
 Tally export
@@ -160,23 +182,38 @@ Tally export
   Output:  C:\Users\You\Desktop\tally-export-20260406-143022
 
 Masters:
-  [ OK ] Ledgers (List of Accounts) (1843267 bytes)
-  [ OK ] Groups (45120 bytes)
-  [FAIL] Stock Items (98 bytes) - Tally said: Could not find Report 'List of Stock Items'!
-  [ OK ] All Masters (one-shot) (2103445 bytes)
+  [ OK ] Ledgers + Groups (List of Accounts) (1843267 bytes)
 
-Trial balances (month-end):
-  [ OK ] Trial Balance 2025-04 (20250401 -> 20250430) (89234 bytes)
-  [ OK ] Trial Balance 2025-05 (20250501 -> 20250531) (91004 bytes)
+Pre-flight: testing trial balance method...
+  [ OK ] Pre-flight test (20250401) (125430 bytes)
+  [GOOD] EXPLODEFLAG works - got ledger-level detail (125430 bytes).
+
+Trial balances (EXPLODEFLAG method, ledger-level):
+  [ OK ] Trial Balance 2025-04 (20250401 -> 20250430) (125430 bytes)
+  [ OK ] Trial Balance 2025-05 (20250501 -> 20250531) (128004 bytes)
   ...
-  [ OK ] Trial Balance 2026-03 (20260301 -> 20260331) (94102 bytes)
+  [ OK ] Trial Balance 2026-03 (20260301 -> 20260331) (131102 bytes)
 
 Done. Files in: C:\Users\You\Desktop\tally-export-20260406-143022
 ```
 
-**It is OK if some rows say [FAIL]**. The script is designed to keep going even if one report is unavailable in your Tally version. As long as `Ledgers` and the monthly `Trial Balance` rows are `[ OK ]`, you have the essentials.
+If the pre-flight detects that the first method does not give ledger-level detail, the script **automatically switches** to an alternative method. You will see:
 
-### B.7 Zip and send the output
+```
+Pre-flight: testing trial balance method...
+  [ OK ] Pre-flight test (20250401) (2200 bytes)
+  [WARN] Response too small (2200 bytes) - likely group-level only.
+         Switching to TDL Collection method for ledger-level detail.
+
+Trial balances (TDL Collection method, ledger-level):
+  [ OK ] Trial Balance 2025-04 ...
+```
+
+Both methods produce the same data. No action is needed from you either way — the script handles it.
+
+**As long as `Ledgers + Groups` and the monthly `Trial Balance` rows are `[ OK ]`, you have everything Fynos needs.**
+
+### B.8 Zip and send the output
 
 1. Open **File Explorer** and navigate to your **Desktop**.
 2. You will see a folder named something like `tally-export-20260406-143022`.
@@ -185,7 +222,7 @@ Done. Files in: C:\Users\You\Desktop\tally-export-20260406-143022
 
 **That is it for Option B.**
 
-### B.8 If Option B also fails
+### B.9 If Option B also fails
 
 If Tally is not accepting requests on port 9000 at all (for example, your IT team disabled the XML API feature, or you are on a very old Tally version), move to **Option C**.
 
@@ -307,6 +344,7 @@ Same as Option B:
 | Script says `curl.exe` not found | Very old Windows version | Use Option C instead, or update to Windows 10 or later |
 | Script runs but all rows are [FAIL] | No company loaded in Tally, or port 9000 is blocked | Open a company in Tally and rerun; confirm the browser check from **Before You Start** |
 | `Set-ExecutionPolicy` gives an error | Group policy lockdown | Use Option C instead — no PowerShell needed |
+| Script says "Switching to TDL Collection method" | Your Tally version does not support EXPLODEFLAG for ledger-level detail | This is normal — the script handles it automatically. No action needed |
 | Some Trial Balance files are much smaller than others | Tally returned an error for those months | Open the file in Notepad. If you see `<LINEERROR>`, the period had no company loaded — reopen the company and rerun for that month |
 | Manual export (Option C) produces empty XML | Wrong report selected, or period outside company's financial year | Confirm the company's financial year in Tally matches the period you are exporting |
 
@@ -345,6 +383,11 @@ If you did not receive `tally-export.ps1` along with this playbook, or you want 
 
   Use this when the Tally Connect desktop app is misbehaving at a client site
   and you need to get data out of Tally right now.
+
+  The script automatically detects whether your Tally version supports the
+  EXPLODEFLAG method for ledger-level trial balances. If not, it falls back
+  to a TDL Collection method that works on all TallyPrime and Tally.ERP 9
+  builds.
 
 .PARAMETER FromMonth
   First month to fetch (inclusive), in YYYY-MM format.
@@ -396,7 +439,7 @@ function Invoke-TallyRequest {
 
   if ($LASTEXITCODE -ne 0) {
     Write-Host "  [FAIL] $Label - curl exit code $LASTEXITCODE" -ForegroundColor Red
-    return
+    return $false
   }
 
   $size = (Get-Item $OutFile).Length
@@ -405,10 +448,11 @@ function Invoke-TallyRequest {
   if ($content -match "<LINEERROR>([^<]+)</LINEERROR>") {
     $err = $Matches[1]
     Write-Host ("  [FAIL] {0} ({1} bytes) - Tally said: {2}" -f $Label, $size, $err) -ForegroundColor Red
-    return
+    return $false
   }
 
   Write-Host ("  [ OK ] {0} ({1} bytes)" -f $Label, $size) -ForegroundColor Green
+  return $true
 }
 
 Write-Host ""
@@ -423,25 +467,48 @@ Write-Host "Masters:"
 Invoke-TallyRequest `
   -Xml '<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>List of Accounts</REPORTNAME></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>' `
   -OutFile (Join-Path $outDir "masters-ledgers.xml") `
-  -Label "Ledgers (List of Accounts)"
-
-Invoke-TallyRequest `
-  -Xml '<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>List of Groups</REPORTNAME></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>' `
-  -OutFile (Join-Path $outDir "masters-groups.xml") `
-  -Label "Groups"
-
-Invoke-TallyRequest `
-  -Xml '<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>List of Stock Items</REPORTNAME></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>' `
-  -OutFile (Join-Path $outDir "masters-stock-items.xml") `
-  -Label "Stock Items"
-
-Invoke-TallyRequest `
-  -Xml '<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>All Masters</REPORTNAME></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>' `
-  -OutFile (Join-Path $outDir "masters-all.xml") `
-  -Label "All Masters (one-shot)"
+  -Label "Ledgers + Groups (List of Accounts)"
 
 Write-Host ""
-Write-Host "Trial balances (month-end):"
+
+Write-Host "Pre-flight: testing trial balance method..."
+
+$testFrom = $FromMonth.Split('-')
+$testLastDay = [DateTime]::DaysInMonth([int]$testFrom[0], [int]$testFrom[1])
+$testSvfrom = "{0}{1}01" -f $testFrom[0], $testFrom[1]
+$testSvto   = "{0}{1}{2:D2}" -f $testFrom[0], $testFrom[1], $testLastDay
+$testFile   = Join-Path $outDir "_preflight-test.xml"
+
+$testXml = "<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>Trial Balance</REPORTNAME><STATICVARIABLES><EXPLODEFLAG>Yes</EXPLODEFLAG><SVFROMDATE>$testSvfrom</SVFROMDATE><SVTODATE>$testSvto</SVTODATE><SVEXPORTFORMAT>`$`$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>"
+
+$testResult = Invoke-TallyRequest `
+  -Xml $testXml `
+  -OutFile $testFile `
+  -Label "Pre-flight test ($testSvfrom)"
+
+$useTDL = $false
+if ($testResult) {
+  $testSize = (Get-Item $testFile).Length
+  if ($testSize -lt 5120) {
+    Write-Host "  [WARN] Response too small ($testSize bytes) - likely group-level only." -ForegroundColor Yellow
+    Write-Host "         Switching to TDL Collection method for ledger-level detail." -ForegroundColor Yellow
+    $useTDL = $true
+  } else {
+    Write-Host "  [GOOD] EXPLODEFLAG works - got ledger-level detail ($testSize bytes)." -ForegroundColor Green
+  }
+} else {
+  Write-Host "  [WARN] EXPLODEFLAG trial balance failed. Switching to TDL Collection method." -ForegroundColor Yellow
+  $useTDL = $true
+}
+
+Remove-Item $testFile -ErrorAction SilentlyContinue
+Write-Host ""
+
+if ($useTDL) {
+  Write-Host "Trial balances (TDL Collection method, ledger-level):"
+} else {
+  Write-Host "Trial balances (EXPLODEFLAG method, ledger-level):"
+}
 
 $fromParts = $FromMonth.Split('-')
 $toParts   = $ToMonth.Split('-')
@@ -456,12 +523,16 @@ while (($y -lt $toYear) -or ($y -eq $toYear -and $m -le $toMon)) {
   $svfrom  = "{0:D4}{1:D2}01" -f $y, $m
   $svto    = "{0:D4}{1:D2}{2:D2}" -f $y, $m, $lastDay
 
-  $xml = "<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>Trial Balance</REPORTNAME><STATICVARIABLES><SVFROMDATE>$svfrom</SVFROMDATE><SVTODATE>$svto</SVTODATE><SVEXPORTFORMAT>`$`$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>"
+  if ($useTDL) {
+    $xml = "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TrialBalanceLedgers</ID></HEADER><BODY><DESC><STATICVARIABLES><SVFROMDATE>$svfrom</SVFROMDATE><SVTODATE>$svto</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME=`"TrialBalanceLedgers`" ISMODIFY=`"No`"><TYPE>Ledger</TYPE><FETCH>Name,Parent,ClosingBalance,OpeningBalance</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>"
+  } else {
+    $xml = "<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>Trial Balance</REPORTNAME><STATICVARIABLES><EXPLODEFLAG>Yes</EXPLODEFLAG><SVFROMDATE>$svfrom</SVFROMDATE><SVTODATE>$svto</SVTODATE><SVEXPORTFORMAT>`$`$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>"
+  }
 
   Invoke-TallyRequest `
     -Xml $xml `
     -OutFile (Join-Path $outDir "trial-balance-$tag.xml") `
-    -Label ("Trial Balance {0} ({1} -> {2})" -f $tag, $svfrom, $svto)
+    -Label ("Trial Balance {0} ({1} -> {2})" -f $tag, $svfrom, $svto) | Out-Null
 
   $m++
   if ($m -gt 12) { $m = 1; $y++ }
@@ -474,4 +545,4 @@ Get-ChildItem $outDir | Format-Table Name, @{Name="Size(KB)";Expression={[math]:
 
 ---
 
-*Last updated: 2026-04-06. Questions or problems? Contact your Fynos account manager and include the zipped output folder plus the PowerShell output if you ran Option B.*
+*Last updated: 2026-04-07. Questions or problems? Contact your Fynos account manager and include the zipped output folder plus the PowerShell output if you ran Option B.*

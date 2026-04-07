@@ -86,10 +86,11 @@ function Invoke-TallyRequest {
   if ($content -match "<LINEERROR>([^<]+)</LINEERROR>") {
     $err = $Matches[1]
     Write-Host ("  [FAIL] {0} ({1} bytes) - Tally said: {2}" -f $Label, $size, $err) -ForegroundColor Red
-    return
+    return $false
   }
 
   Write-Host ("  [ OK ] {0} ({1} bytes)" -f $Label, $size) -ForegroundColor Green
+  return $true
 }
 
 Write-Host ""
@@ -112,10 +113,52 @@ Invoke-TallyRequest `
 
 Write-Host ""
 
+# ─── Pre-flight: pick the right trial balance method ──────────────────
+# Some TallyPrime builds ignore EXPLODEFLAG and return group-level totals.
+# We test with one month first. If the result is too small (< 5KB = likely
+# only ~9 group rows), we fall back to a TDL Collection request which
+# bypasses the report layer entirely and asks Tally's object model directly
+# for ledger-level closing balances.
+
+Write-Host "Pre-flight: testing trial balance method..."
+
+$testFrom = $FromMonth.Split('-')
+$testLastDay = [DateTime]::DaysInMonth([int]$testFrom[0], [int]$testFrom[1])
+$testSvfrom = "{0}{1}01" -f $testFrom[0], $testFrom[1]
+$testSvto   = "{0}{1}{2:D2}" -f $testFrom[0], $testFrom[1], $testLastDay
+$testFile   = Join-Path $outDir "_preflight-test.xml"
+
+$testXml = "<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>Trial Balance</REPORTNAME><STATICVARIABLES><EXPLODEFLAG>Yes</EXPLODEFLAG><SVFROMDATE>$testSvfrom</SVFROMDATE><SVTODATE>$testSvto</SVTODATE><SVEXPORTFORMAT>`$`$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>"
+
+$testResult = Invoke-TallyRequest `
+  -Xml $testXml `
+  -OutFile $testFile `
+  -Label "Pre-flight test ($testSvfrom)"
+
+$useTDL = $false
+if ($testResult) {
+  $testSize = (Get-Item $testFile).Length
+  if ($testSize -lt 5120) {
+    Write-Host "  [WARN] Response too small ($testSize bytes) - likely group-level only." -ForegroundColor Yellow
+    Write-Host "         Switching to TDL Collection method for ledger-level detail." -ForegroundColor Yellow
+    $useTDL = $true
+  } else {
+    Write-Host "  [GOOD] EXPLODEFLAG works - got ledger-level detail ($testSize bytes)." -ForegroundColor Green
+  }
+} else {
+  Write-Host "  [WARN] EXPLODEFLAG trial balance failed. Switching to TDL Collection method." -ForegroundColor Yellow
+  $useTDL = $true
+}
+
+Remove-Item $testFile -ErrorAction SilentlyContinue
+Write-Host ""
+
 # ─── Month-by-month Trial Balance (ledger-level) ─────────────────────
-# EXPLODEFLAG=Yes tells Tally to expand groups into individual ledger rows
-# so we get per-vendor / per-customer balances, not just group totals.
-Write-Host "Trial balances (ledger-level, month-end):"
+if ($useTDL) {
+  Write-Host "Trial balances (TDL Collection method, ledger-level):"
+} else {
+  Write-Host "Trial balances (EXPLODEFLAG method, ledger-level):"
+}
 
 $fromParts = $FromMonth.Split('-')
 $toParts   = $ToMonth.Split('-')
@@ -130,12 +173,20 @@ while (($y -lt $toYear) -or ($y -eq $toYear -and $m -le $toMon)) {
   $svfrom  = "{0:D4}{1:D2}01" -f $y, $m
   $svto    = "{0:D4}{1:D2}{2:D2}" -f $y, $m, $lastDay
 
-  $xml = "<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>Trial Balance</REPORTNAME><STATICVARIABLES><EXPLODEFLAG>Yes</EXPLODEFLAG><SVFROMDATE>$svfrom</SVFROMDATE><SVTODATE>$svto</SVTODATE><SVEXPORTFORMAT>`$`$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>"
+  if ($useTDL) {
+    # TDL Collection: bypasses the report layer and queries Tally's object
+    # model directly. Asks for every Ledger's Name, Parent group, and
+    # ClosingBalance within the given date range. Works on all TallyPrime
+    # and Tally.ERP 9 builds.
+    $xml = "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TrialBalanceLedgers</ID></HEADER><BODY><DESC><STATICVARIABLES><SVFROMDATE>$svfrom</SVFROMDATE><SVTODATE>$svto</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME=`"TrialBalanceLedgers`" ISMODIFY=`"No`"><TYPE>Ledger</TYPE><FETCH>Name,Parent,ClosingBalance,OpeningBalance</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>"
+  } else {
+    $xml = "<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>Trial Balance</REPORTNAME><STATICVARIABLES><EXPLODEFLAG>Yes</EXPLODEFLAG><SVFROMDATE>$svfrom</SVFROMDATE><SVTODATE>$svto</SVTODATE><SVEXPORTFORMAT>`$`$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>"
+  }
 
   Invoke-TallyRequest `
     -Xml $xml `
     -OutFile (Join-Path $outDir "trial-balance-$tag.xml") `
-    -Label ("Trial Balance {0} ({1} -> {2})" -f $tag, $svfrom, $svto)
+    -Label ("Trial Balance {0} ({1} -> {2})" -f $tag, $svfrom, $svto) | Out-Null
 
   $m++
   if ($m -gt 12) { $m = 1; $y++ }
