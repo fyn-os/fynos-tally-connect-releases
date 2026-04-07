@@ -100,32 +100,22 @@ Write-Host "  Output:  $outDir"
 Write-Host ""
 
 # ─── Masters ──────────────────────────────────────────────────────────
+# "List of Accounts" is the one report name that works reliably across
+# TallyPrime and Tally.ERP 9. It exports groups AND ledgers in one shot,
+# so separate "List of Groups" / "All Masters" calls are unnecessary.
 Write-Host "Masters:"
 
 Invoke-TallyRequest `
   -Xml '<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>List of Accounts</REPORTNAME></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>' `
   -OutFile (Join-Path $outDir "masters-ledgers.xml") `
-  -Label "Ledgers (List of Accounts)"
-
-Invoke-TallyRequest `
-  -Xml '<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>List of Groups</REPORTNAME></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>' `
-  -OutFile (Join-Path $outDir "masters-groups.xml") `
-  -Label "Groups"
-
-Invoke-TallyRequest `
-  -Xml '<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>List of Stock Items</REPORTNAME></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>' `
-  -OutFile (Join-Path $outDir "masters-stock-items.xml") `
-  -Label "Stock Items"
-
-Invoke-TallyRequest `
-  -Xml '<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>All Masters</REPORTNAME></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>' `
-  -OutFile (Join-Path $outDir "masters-all.xml") `
-  -Label "All Masters (one-shot)"
+  -Label "Ledgers + Groups (List of Accounts)"
 
 Write-Host ""
 
-# ─── Month-by-month Trial Balance ─────────────────────────────────────
-Write-Host "Trial balances (month-end):"
+# ─── Month-by-month Trial Balance (ledger-level) ─────────────────────
+# EXPLODEFLAG=Yes tells Tally to expand groups into individual ledger rows
+# so we get per-vendor / per-customer balances, not just group totals.
+Write-Host "Trial balances (ledger-level, month-end):"
 
 $fromParts = $FromMonth.Split('-')
 $toParts   = $ToMonth.Split('-')
@@ -140,8 +130,7 @@ while (($y -lt $toYear) -or ($y -eq $toYear -and $m -le $toMon)) {
   $svfrom  = "{0:D4}{1:D2}01" -f $y, $m
   $svto    = "{0:D4}{1:D2}{2:D2}" -f $y, $m, $lastDay
 
-  # Note: `$`$ escapes the literal `$$` Tally needs in SVEXPORTFORMAT
-  $xml = "<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>Trial Balance</REPORTNAME><STATICVARIABLES><SVFROMDATE>$svfrom</SVFROMDATE><SVTODATE>$svto</SVTODATE><SVEXPORTFORMAT>`$`$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>"
+  $xml = "<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>Trial Balance</REPORTNAME><STATICVARIABLES><EXPLODEFLAG>Yes</EXPLODEFLAG><SVFROMDATE>$svfrom</SVFROMDATE><SVTODATE>$svto</SVTODATE><SVEXPORTFORMAT>`$`$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>"
 
   Invoke-TallyRequest `
     -Xml $xml `
