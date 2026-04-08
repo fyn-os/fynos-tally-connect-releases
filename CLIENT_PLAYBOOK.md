@@ -113,11 +113,21 @@ Save the file to your **Desktop** — this keeps the path simple.
 
 ### B.3 Navigate to your Desktop
 
-In the PowerShell window, type this and press **Enter**:
+In the PowerShell window, type **one** of the following and press **Enter** (all three do the same thing — use whichever works on your machine):
+
+```powershell
+cd "$env:USERPROFILE\Desktop"
+```
+
+```powershell
+cd ~\Desktop
+```
 
 ```powershell
 cd $HOME\Desktop
 ```
+
+> **Note:** Do NOT right-click the `.ps1` file and choose "Run with PowerShell". That opens a window that closes immediately, and you won't be able to see the output or pass parameters. Always run the script from inside a PowerShell window you opened yourself.
 
 ### B.4 Allow the script to run (first time only)
 
