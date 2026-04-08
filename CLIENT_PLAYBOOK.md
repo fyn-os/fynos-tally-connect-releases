@@ -183,7 +183,7 @@ If your Tally is running on a different computer on the same network (example: I
 
 ### B.7 What you will see
 
-The script first runs a **pre-flight test** to pick the best method for your Tally version, then exports the data. A normal run looks like:
+The script exports masters and then 12 monthly trial balances. A normal run looks like:
 
 ```
 Tally export
@@ -194,11 +194,7 @@ Tally export
 Masters:
   [ OK ] Ledgers + Groups (List of Accounts) (1843267 bytes)
 
-Pre-flight: testing trial balance method...
-  [ OK ] Pre-flight test (20250401) (125430 bytes)
-  [GOOD] EXPLODEFLAG works - got ledger-level detail (125430 bytes).
-
-Trial balances (EXPLODEFLAG method, ledger-level):
+Trial balances (ledger-level, month-end):
   [ OK ] Trial Balance 2025-04 (20250401 -> 20250430) (125430 bytes)
   [ OK ] Trial Balance 2025-05 (20250501 -> 20250531) (128004 bytes)
   ...
@@ -207,19 +203,7 @@ Trial balances (EXPLODEFLAG method, ledger-level):
 Done. Files in: C:\Users\You\Desktop\tally-export-20260406-143022
 ```
 
-If the pre-flight detects that the first method does not give ledger-level detail, the script **automatically switches** to an alternative method. You will see:
-
-```
-Pre-flight: testing trial balance method...
-  [ OK ] Pre-flight test (20250401) (2200 bytes)
-  [WARN] Response too small (2200 bytes) - likely group-level only.
-         Switching to TDL Collection method for ledger-level detail.
-
-Trial balances (TDL Collection method, ledger-level):
-  [ OK ] Trial Balance 2025-04 ...
-```
-
-Both methods produce the same data. No action is needed from you either way — the script handles it.
+Each trial balance file contains every individual ledger (vendors, customers, expenses, bank accounts, etc.) with their opening and closing balances for that month. This gives Fynos month-by-month balance data at the individual account level.
 
 **As long as `Ledgers + Groups` and the monthly `Trial Balance` rows are `[ OK ]`, you have everything Fynos needs.**
 
@@ -402,7 +386,7 @@ Same as Option B:
 | Script says `curl.exe` not found | Very old Windows version | Use Option C instead, or update to Windows 10 or later |
 | Script runs but all rows are [FAIL] | No company loaded in Tally, or port 9000 is blocked | Open a company in Tally and rerun; confirm the browser check from **Before You Start** |
 | `Set-ExecutionPolicy` gives an error | Group policy lockdown | Use Option C instead — no PowerShell needed |
-| Script says "Switching to TDL Collection method" | Your Tally version does not support EXPLODEFLAG for ledger-level detail | This is normal — the script handles it automatically. No action needed |
+| Trial balance files are very small (< 5 KB) | Tally returned group-level totals instead of individual ledger balances | Contact your Fynos account manager — they can provide an updated script |
 | Some Trial Balance files are much smaller than others | Tally returned an error for those months | Open the file in Notepad. If you see `<LINEERROR>`, the period had no company loaded — reopen the company and rerun for that month |
 | Manual export (Option C) produces empty XML | Wrong report selected, or period outside company's financial year | Confirm the company's financial year in Tally matches the period you are exporting |
 
@@ -441,11 +425,6 @@ If you did not receive `tally-export.ps1` along with this playbook, or you want 
 
   Use this when the Tally Connect desktop app is misbehaving at a client site
   and you need to get data out of Tally right now.
-
-  The script automatically detects whether your Tally version supports the
-  EXPLODEFLAG method for ledger-level trial balances. If not, it falls back
-  to a TDL Collection method that works on all TallyPrime and Tally.ERP 9
-  builds.
 
 .PARAMETER FromMonth
   First month to fetch (inclusive), in YYYY-MM format.
@@ -529,44 +508,7 @@ Invoke-TallyRequest `
 
 Write-Host ""
 
-Write-Host "Pre-flight: testing trial balance method..."
-
-$testFrom = $FromMonth.Split('-')
-$testLastDay = [DateTime]::DaysInMonth([int]$testFrom[0], [int]$testFrom[1])
-$testSvfrom = "{0}{1}01" -f $testFrom[0], $testFrom[1]
-$testSvto   = "{0}{1}{2:D2}" -f $testFrom[0], $testFrom[1], $testLastDay
-$testFile   = Join-Path $outDir "_preflight-test.xml"
-
-$testXml = "<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>Trial Balance</REPORTNAME><STATICVARIABLES><EXPLODEFLAG>Yes</EXPLODEFLAG><SVFROMDATE>$testSvfrom</SVFROMDATE><SVTODATE>$testSvto</SVTODATE><SVEXPORTFORMAT>`$`$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>"
-
-$testResult = Invoke-TallyRequest `
-  -Xml $testXml `
-  -OutFile $testFile `
-  -Label "Pre-flight test ($testSvfrom)"
-
-$useTDL = $false
-if ($testResult) {
-  $testSize = (Get-Item $testFile).Length
-  if ($testSize -lt 5120) {
-    Write-Host "  [WARN] Response too small ($testSize bytes) - likely group-level only." -ForegroundColor Yellow
-    Write-Host "         Switching to TDL Collection method for ledger-level detail." -ForegroundColor Yellow
-    $useTDL = $true
-  } else {
-    Write-Host "  [GOOD] EXPLODEFLAG works - got ledger-level detail ($testSize bytes)." -ForegroundColor Green
-  }
-} else {
-  Write-Host "  [WARN] EXPLODEFLAG trial balance failed. Switching to TDL Collection method." -ForegroundColor Yellow
-  $useTDL = $true
-}
-
-Remove-Item $testFile -ErrorAction SilentlyContinue
-Write-Host ""
-
-if ($useTDL) {
-  Write-Host "Trial balances (TDL Collection method, ledger-level):"
-} else {
-  Write-Host "Trial balances (EXPLODEFLAG method, ledger-level):"
-}
+Write-Host "Trial balances (ledger-level, month-end):"
 
 $fromParts = $FromMonth.Split('-')
 $toParts   = $ToMonth.Split('-')
@@ -581,11 +523,7 @@ while (($y -lt $toYear) -or ($y -eq $toYear -and $m -le $toMon)) {
   $svfrom  = "{0:D4}{1:D2}01" -f $y, $m
   $svto    = "{0:D4}{1:D2}{2:D2}" -f $y, $m, $lastDay
 
-  if ($useTDL) {
-    $xml = "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TrialBalanceLedgers</ID></HEADER><BODY><DESC><STATICVARIABLES><SVFROMDATE>$svfrom</SVFROMDATE><SVTODATE>$svto</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME=`"TrialBalanceLedgers`" ISMODIFY=`"No`"><TYPE>Ledger</TYPE><FETCH>Name,Parent,ClosingBalance,OpeningBalance</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>"
-  } else {
-    $xml = "<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>Trial Balance</REPORTNAME><STATICVARIABLES><EXPLODEFLAG>Yes</EXPLODEFLAG><SVFROMDATE>$svfrom</SVFROMDATE><SVTODATE>$svto</SVTODATE><SVEXPORTFORMAT>`$`$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>"
-  }
+  $xml = "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TrialBalanceLedgers</ID></HEADER><BODY><DESC><STATICVARIABLES><SVFROMDATE>$svfrom</SVFROMDATE><SVTODATE>$svto</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME=`"TrialBalanceLedgers`" ISMODIFY=`"No`"><TYPE>Ledger</TYPE><FETCH>Name,Parent,ClosingBalance,OpeningBalance</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>"
 
   Invoke-TallyRequest `
     -Xml $xml `
@@ -603,4 +541,4 @@ Get-ChildItem $outDir | Format-Table Name, @{Name="Size(KB)";Expression={[math]:
 
 ---
 
-*Last updated: 2026-04-07. Questions or problems? Contact your Fynos account manager and include the zipped output folder plus the PowerShell output if you ran Option B.*
+*Last updated: 2026-04-08. Questions or problems? Contact your Fynos account manager and include the zipped output folder plus the PowerShell output if you ran Option B.*
