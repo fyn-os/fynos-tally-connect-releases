@@ -232,7 +232,55 @@ Both methods produce the same data. No action is needed from you either way — 
 
 **That is it for Option B.**
 
-### B.9 If Option B also fails
+### B.9 If the script is blocked: raw curl commands (last resort for Option B)
+
+If your IT policy blocks `.ps1` scripts entirely and `Set-ExecutionPolicy` does not work, you can paste these commands **directly into PowerShell** one at a time. No script file needed — just copy-paste each block.
+
+First, create an output folder:
+
+```powershell
+mkdir "$env:USERPROFILE\Desktop\Fynos-Tally-Export" -Force
+```
+
+**Export masters (ledgers + groups):**
+
+```powershell
+curl.exe -sS -X POST -H "Content-Type: text/xml" --data-binary "<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>List of Accounts</REPORTNAME></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>" http://127.0.0.1:9000/ -o "$env:USERPROFILE\Desktop\Fynos-Tally-Export\masters-ledgers.xml"
+```
+
+**Export trial balances (one per month)** — copy-paste all 12 commands:
+
+```powershell
+curl.exe -sS -X POST -H "Content-Type: text/xml" --data-binary "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TrialBalanceLedgers</ID></HEADER><BODY><DESC><STATICVARIABLES><SVFROMDATE>20250401</SVFROMDATE><SVTODATE>20250430</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME=""TrialBalanceLedgers"" ISMODIFY=""No""><TYPE>Ledger</TYPE><FETCH>Name,Parent,ClosingBalance,OpeningBalance</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>" http://127.0.0.1:9000/ -o "$env:USERPROFILE\Desktop\Fynos-Tally-Export\trial-balance-2025-04.xml"
+
+curl.exe -sS -X POST -H "Content-Type: text/xml" --data-binary "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TrialBalanceLedgers</ID></HEADER><BODY><DESC><STATICVARIABLES><SVFROMDATE>20250501</SVFROMDATE><SVTODATE>20250531</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME=""TrialBalanceLedgers"" ISMODIFY=""No""><TYPE>Ledger</TYPE><FETCH>Name,Parent,ClosingBalance,OpeningBalance</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>" http://127.0.0.1:9000/ -o "$env:USERPROFILE\Desktop\Fynos-Tally-Export\trial-balance-2025-05.xml"
+
+curl.exe -sS -X POST -H "Content-Type: text/xml" --data-binary "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TrialBalanceLedgers</ID></HEADER><BODY><DESC><STATICVARIABLES><SVFROMDATE>20250601</SVFROMDATE><SVTODATE>20250630</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME=""TrialBalanceLedgers"" ISMODIFY=""No""><TYPE>Ledger</TYPE><FETCH>Name,Parent,ClosingBalance,OpeningBalance</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>" http://127.0.0.1:9000/ -o "$env:USERPROFILE\Desktop\Fynos-Tally-Export\trial-balance-2025-06.xml"
+
+curl.exe -sS -X POST -H "Content-Type: text/xml" --data-binary "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TrialBalanceLedgers</ID></HEADER><BODY><DESC><STATICVARIABLES><SVFROMDATE>20250701</SVFROMDATE><SVTODATE>20250731</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME=""TrialBalanceLedgers"" ISMODIFY=""No""><TYPE>Ledger</TYPE><FETCH>Name,Parent,ClosingBalance,OpeningBalance</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>" http://127.0.0.1:9000/ -o "$env:USERPROFILE\Desktop\Fynos-Tally-Export\trial-balance-2025-07.xml"
+
+curl.exe -sS -X POST -H "Content-Type: text/xml" --data-binary "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TrialBalanceLedgers</ID></HEADER><BODY><DESC><STATICVARIABLES><SVFROMDATE>20250801</SVFROMDATE><SVTODATE>20250831</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME=""TrialBalanceLedgers"" ISMODIFY=""No""><TYPE>Ledger</TYPE><FETCH>Name,Parent,ClosingBalance,OpeningBalance</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>" http://127.0.0.1:9000/ -o "$env:USERPROFILE\Desktop\Fynos-Tally-Export\trial-balance-2025-08.xml"
+
+curl.exe -sS -X POST -H "Content-Type: text/xml" --data-binary "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TrialBalanceLedgers</ID></HEADER><BODY><DESC><STATICVARIABLES><SVFROMDATE>20250901</SVFROMDATE><SVTODATE>20250930</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME=""TrialBalanceLedgers"" ISMODIFY=""No""><TYPE>Ledger</TYPE><FETCH>Name,Parent,ClosingBalance,OpeningBalance</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>" http://127.0.0.1:9000/ -o "$env:USERPROFILE\Desktop\Fynos-Tally-Export\trial-balance-2025-09.xml"
+
+curl.exe -sS -X POST -H "Content-Type: text/xml" --data-binary "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TrialBalanceLedgers</ID></HEADER><BODY><DESC><STATICVARIABLES><SVFROMDATE>20251001</SVFROMDATE><SVTODATE>20251031</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME=""TrialBalanceLedgers"" ISMODIFY=""No""><TYPE>Ledger</TYPE><FETCH>Name,Parent,ClosingBalance,OpeningBalance</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>" http://127.0.0.1:9000/ -o "$env:USERPROFILE\Desktop\Fynos-Tally-Export\trial-balance-2025-10.xml"
+
+curl.exe -sS -X POST -H "Content-Type: text/xml" --data-binary "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TrialBalanceLedgers</ID></HEADER><BODY><DESC><STATICVARIABLES><SVFROMDATE>20251101</SVFROMDATE><SVTODATE>20251130</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME=""TrialBalanceLedgers"" ISMODIFY=""No""><TYPE>Ledger</TYPE><FETCH>Name,Parent,ClosingBalance,OpeningBalance</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>" http://127.0.0.1:9000/ -o "$env:USERPROFILE\Desktop\Fynos-Tally-Export\trial-balance-2025-11.xml"
+
+curl.exe -sS -X POST -H "Content-Type: text/xml" --data-binary "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TrialBalanceLedgers</ID></HEADER><BODY><DESC><STATICVARIABLES><SVFROMDATE>20251201</SVFROMDATE><SVTODATE>20251231</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME=""TrialBalanceLedgers"" ISMODIFY=""No""><TYPE>Ledger</TYPE><FETCH>Name,Parent,ClosingBalance,OpeningBalance</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>" http://127.0.0.1:9000/ -o "$env:USERPROFILE\Desktop\Fynos-Tally-Export\trial-balance-2025-12.xml"
+
+curl.exe -sS -X POST -H "Content-Type: text/xml" --data-binary "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TrialBalanceLedgers</ID></HEADER><BODY><DESC><STATICVARIABLES><SVFROMDATE>20260101</SVFROMDATE><SVTODATE>20260131</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME=""TrialBalanceLedgers"" ISMODIFY=""No""><TYPE>Ledger</TYPE><FETCH>Name,Parent,ClosingBalance,OpeningBalance</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>" http://127.0.0.1:9000/ -o "$env:USERPROFILE\Desktop\Fynos-Tally-Export\trial-balance-2026-01.xml"
+
+curl.exe -sS -X POST -H "Content-Type: text/xml" --data-binary "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TrialBalanceLedgers</ID></HEADER><BODY><DESC><STATICVARIABLES><SVFROMDATE>20260201</SVFROMDATE><SVTODATE>20260228</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME=""TrialBalanceLedgers"" ISMODIFY=""No""><TYPE>Ledger</TYPE><FETCH>Name,Parent,ClosingBalance,OpeningBalance</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>" http://127.0.0.1:9000/ -o "$env:USERPROFILE\Desktop\Fynos-Tally-Export\trial-balance-2026-02.xml"
+
+curl.exe -sS -X POST -H "Content-Type: text/xml" --data-binary "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TrialBalanceLedgers</ID></HEADER><BODY><DESC><STATICVARIABLES><SVFROMDATE>20260301</SVFROMDATE><SVTODATE>20260331</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME=""TrialBalanceLedgers"" ISMODIFY=""No""><TYPE>Ledger</TYPE><FETCH>Name,Parent,ClosingBalance,OpeningBalance</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>" http://127.0.0.1:9000/ -o "$env:USERPROFILE\Desktop\Fynos-Tally-Export\trial-balance-2026-03.xml"
+```
+
+After all commands complete, zip the `Fynos-Tally-Export` folder and send it to your Fynos contact (same as step B.8).
+
+> **Tip:** If Tally is on a different port or IP, replace `http://127.0.0.1:9000/` in every command above with the correct address.
+
+### B.10 If Option B also fails
 
 If Tally is not accepting requests on port 9000 at all (for example, your IT team disabled the XML API feature, or you are on a very old Tally version), move to **Option C**.
 
