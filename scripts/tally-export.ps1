@@ -17,7 +17,7 @@
     2. Trial Balance report with EXPLODEFLAG (single-level expansion)
     3. Trial Balance report with EXPLODENESTEDFLAG (recursive expansion)
     4. Built-in Ledger collection (no custom TDL)
-    5. Custom TDL Collection (LAST resort — many builds block this)
+    5. Custom TDL Collection (LAST resort - many builds block this)
 
   For each method, the script does a one-month preflight test, counts the
   number of ledger rows in the response, and picks the first method that
@@ -69,17 +69,17 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# ─── Setup ────────────────────────────────────────────────────────────
+# --- Setup ------------------------------------------------------------
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $outDir = Join-Path (Get-Location) "tally-export-$timestamp"
 New-Item -ItemType Directory -Path $outDir -Force | Out-Null
 
 # Threshold: if a response has fewer than this many <DSPDISPNAME> rows, it's
 # almost certainly only showing group totals (real companies have 100s of
-# ledgers). Tuned conservatively — even tiny companies have 30-50+ ledgers.
+# ledgers). Tuned conservatively - even tiny companies have 30-50+ ledgers.
 $LEDGER_ROW_THRESHOLD = 50
 
-# ─── Core HTTP function ───────────────────────────────────────────────
+# --- Core HTTP function -----------------------------------------------
 
 function Invoke-TallyRequest {
   param(
@@ -129,7 +129,7 @@ function Invoke-TallyRequest {
   }
 
   # Count <DSPDISPNAME> rows (Trial Balance row count) or <LEDGER NAME=> tags
-  # (Collection format) — whichever is present
+  # (Collection format) - whichever is present
   $rows = ([regex]::Matches($content, '<DSPDISPNAME>')).Count
   if ($rows -eq 0) {
     $rows = ([regex]::Matches($content, '<LEDGER\s+NAME=')).Count
@@ -139,7 +139,7 @@ function Invoke-TallyRequest {
   return @{ Success = $true; Size = $size; Rows = $rows; Error = $null }
 }
 
-# ─── XML envelope builders ────────────────────────────────────────────
+# --- XML envelope builders --------------------------------------------
 
 function Get-TBXmlMethod1-AllFlags {
   param([string]$From, [string]$To)
@@ -172,7 +172,7 @@ function Get-TBXmlMethod3-NestedExplode {
 
 function Get-TBXmlMethod4-LedgerCollection {
   param([string]$From, [string]$To)
-  # Method 4: Built-in Ledger collection. No custom TDL — just asks Tally
+  # Method 4: Built-in Ledger collection. No custom TDL - just asks Tally
   # for its built-in "Ledger" collection by ID. Should work even on builds
   # that block custom TDL (Method 5).
   return @"
@@ -182,27 +182,27 @@ function Get-TBXmlMethod4-LedgerCollection {
 
 function Get-TBXmlMethod5-CustomTDL {
   param([string]$From, [string]$To)
-  # Method 5: Custom TDL Collection — LAST resort. Many corporate/restricted
+  # Method 5: Custom TDL Collection - LAST resort. Many corporate/restricted
   # TallyPrime builds block this entirely with "Unknown Request".
   return @"
 <ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST><TYPE>Collection</TYPE><ID>TrialBalanceLedgers</ID></HEADER><BODY><DESC><STATICVARIABLES><SVFROMDATE>$From</SVFROMDATE><SVTODATE>$To</SVTODATE></STATICVARIABLES><TDL><TDLMESSAGE><COLLECTION NAME=`"TrialBalanceLedgers`" ISMODIFY=`"No`"><TYPE>Ledger</TYPE><FETCH>Name,Parent,ClosingBalance,OpeningBalance</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>
 "@
 }
 
-# ─── Banner ───────────────────────────────────────────────────────────
+# --- Banner -----------------------------------------------------------
 
 Write-Host ""
-Write-Host "═══════════════════════════════════════════════════════════════"
+Write-Host "==============================================================="
 Write-Host "  Fynos Tally Export"
-Write-Host "═══════════════════════════════════════════════════════════════"
+Write-Host "==============================================================="
 Write-Host "  URL:     $TallyUrl"
 Write-Host "  Period:  $FromMonth through $ToMonth"
 Write-Host "  Output:  $outDir"
 Write-Host ""
 
-# ─── Phase 1: Masters export ──────────────────────────────────────────
+# --- Phase 1: Masters export ------------------------------------------
 
-Write-Host "── Phase 1: Masters (Chart of Accounts) ──" -ForegroundColor Cyan
+Write-Host "-- Phase 1: Masters (Chart of Accounts) --" -ForegroundColor Cyan
 
 $mastersResult = Invoke-TallyRequest `
   -Xml '<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER><BODY><EXPORTDATA><REQUESTDESC><REPORTNAME>List of Accounts</REPORTNAME></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>' `
@@ -218,9 +218,9 @@ if (-not $mastersResult.Success) {
 
 Write-Host ""
 
-# ─── Phase 2: Method discovery (preflight) ────────────────────────────
+# --- Phase 2: Method discovery (preflight) ----------------------------
 
-Write-Host "── Phase 2: Discovering best trial balance method ──" -ForegroundColor Cyan
+Write-Host "-- Phase 2: Discovering best trial balance method --" -ForegroundColor Cyan
 Write-Host "  Testing each method against $FromMonth to find one that returns ledger-level detail..."
 Write-Host "  (Threshold: more than $LEDGER_ROW_THRESHOLD rows = ledger-level)"
 Write-Host ""
@@ -286,7 +286,7 @@ foreach ($method in $methods) {
     $chosenMethod = $method
     break
   } elseif ($result.Success -and $result.Rows -le $LEDGER_ROW_THRESHOLD) {
-    Write-Host ("    [SKIP] Only $($result.Rows) rows — likely group-level only, trying next") -ForegroundColor Yellow
+    Write-Host ("    [SKIP] Only $($result.Rows) rows - likely group-level only, trying next") -ForegroundColor Yellow
   }
   Write-Host ""
 }
@@ -294,22 +294,22 @@ foreach ($method in $methods) {
 # Clean up preflight test files
 Get-ChildItem $outDir -Filter "_preflight_*.xml" | Remove-Item -ErrorAction SilentlyContinue
 
-# ─── Phase 3: Final decision ──────────────────────────────────────────
+# --- Phase 3: Final decision ------------------------------------------
 
 Write-Host ""
-Write-Host "── Phase 3: Method discovery results ──" -ForegroundColor Cyan
+Write-Host "-- Phase 3: Method discovery results --" -ForegroundColor Cyan
 $diagnostics | Format-Table Method, Success, Size, Rows, Error -AutoSize
 
 if ($null -eq $chosenMethod) {
   # No method returned ledger-level detail. Write a diagnosis file and exit.
   Write-Host ""
-  Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Red
+  Write-Host "===============================================================" -ForegroundColor Red
   Write-Host "  NO METHOD WORKED FOR LEDGER-LEVEL TRIAL BALANCE" -ForegroundColor Red
-  Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Red
+  Write-Host "===============================================================" -ForegroundColor Red
 
   $diagFile = Join-Path $outDir "DIAGNOSIS.txt"
   $diagText = @"
-Fynos Tally Export — Diagnosis
+Fynos Tally Export - Diagnosis
 ================================
 Generated: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
 Tally URL: $TallyUrl
@@ -336,14 +336,14 @@ This always works, regardless of XML API restrictions.
 
   1. Open TallyPrime, load the company you want to export.
   2. Go to: Display More Reports -> Trial Balance.
-  3. Press F12 (Configure) — the configuration panel opens.
+  3. Press F12 (Configure) - the configuration panel opens.
   4. Change these settings:
        Format of Report                       : Detailed
        Expand all levels in Detailed format   : Yes
        Show Opening Balance                   : Yes
   5. Press Ctrl + A to accept the configuration.
   6. The Trial Balance now shows individual ledgers (vendors, customers,
-     expenses, etc.) — confirm you can see them on screen.
+     expenses, etc.) - confirm you can see them on screen.
   7. Press F2 to set the period:
        From date: 1-4-2025      To date: 30-4-2025  (April 2025)
   8. Press Alt + E -> Export -> Format: XML (data interchange).
@@ -378,7 +378,7 @@ with the closing balance of every ledger as of 31-Mar-2026.
   Write-Host ""
   Write-Host "  Next step: open the diagnosis file for instructions on the"
   Write-Host "  manual export workaround. The masters file IS already exported"
-  Write-Host "  successfully — you only need the manual trial balance step."
+  Write-Host "  successfully - you only need the manual trial balance step."
   Write-Host ""
   Write-Host "  Output folder: $outDir" -ForegroundColor Cyan
   exit 2
@@ -388,9 +388,9 @@ Write-Host ""
 Write-Host "  WINNING METHOD: $($chosenMethod.Name)" -ForegroundColor Green
 Write-Host ""
 
-# ─── Phase 4: Run the chosen method for all 12 months ─────────────────
+# --- Phase 4: Run the chosen method for all 12 months -----------------
 
-Write-Host "── Phase 4: Exporting all months using winning method ──" -ForegroundColor Cyan
+Write-Host "-- Phase 4: Exporting all months using winning method --" -ForegroundColor Cyan
 
 $fromParts = $FromMonth.Split('-')
 $toParts   = $ToMonth.Split('-')
@@ -416,12 +416,12 @@ while (($y -lt $toYear) -or ($y -eq $toYear -and $m -le $toMon)) {
   if ($m -gt 12) { $m = 1; $y++ }
 }
 
-# ─── Done ─────────────────────────────────────────────────────────────
+# --- Done -------------------------------------------------------------
 
 Write-Host ""
-Write-Host "═══════════════════════════════════════════════════════════════"
+Write-Host "==============================================================="
 Write-Host "  Done. Files in: $outDir" -ForegroundColor Cyan
-Write-Host "═══════════════════════════════════════════════════════════════"
+Write-Host "==============================================================="
 Get-ChildItem $outDir | Sort-Object Name | Format-Table Name, @{Name="Size(KB)";Expression={[math]::Round($_.Length/1KB,1)}} -AutoSize
 
 Write-Host ""
