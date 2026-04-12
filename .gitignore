@@ -1,0 +1,11 @@
+.claude/
+
+# Test artifacts (added by git-sync workflow)
+screenshots/
+playwright-report/
+test-results/
+auth-state.json
+
+# Coverage reports
+coverage/
+.nyc_output/
